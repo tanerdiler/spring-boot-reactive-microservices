@@ -1,0 +1,135 @@
+version: '3'
+services:
+
+  discovery:
+    image: tanerdiler/service-discovery
+    container_name: reactive-discovery
+    build:
+      context: ./containerized-discovery
+      dockerfile: Dockerfile
+    ports:
+      - "8761:8761"
+  mongodb:
+    image: mongo:3.7
+    hostname: mongo
+    ports:
+      - "27017:27017"
+#   cassandra-node-1:
+#     hostname: cassandra-1
+#     image: cassandra:latest
+#     command: /bin/bash -c "sleep 1 && echo ' -- Pausing to let system catch up ... -->' && /docker-entrypoint.sh cassandra -f"
+#     expose:
+#       - 7000
+#       - 7001
+#       - 7199
+#       - 9042
+#       - 9160
+#  cassandra-node-2:
+#    hostname: cassandra-2
+#    image: cassandra:latest
+#    command: /bin/bash -c "sleep 30 && echo ' -- Pausing to let system catch up ... -->' && /docker-entrypoint.sh cassandra -f"
+#    links:
+#      - cassandra-node-1:cassandra
+#    expose:
+#      - 7000
+#      - 7001
+#      - 7199
+#      - 9042
+#      - 9160
+  gateway:
+    image: tanerdiler/service-gateway
+    container_name: reactive-gateway
+    build:
+      context: ./containerized-gateway
+      dockerfile: Dockerfile
+    ports:
+      - "8762:8762"
+    depends_on:
+      - discovery
+    links:
+      - discovery:discovery
+  dataloader:
+    image: tanerdiler/service-dataloader-api
+    container_name: reactive-dataloader
+    build:
+      context: ./containerized-dataloader
+      dockerfile: Dockerfile
+    ports:
+      - "7499:8080"
+    depends_on:
+      - mongodb
+#      - cassandra-node-1
+    links:
+      - mongodb:mongo
+    environment:
+      SPRING_DATA_MONGODB_URI: mongodb://mongo/test
+  accounts:
+    image: tanerdiler/service-accounts-api
+    container_name: reactive-accounts
+    build:
+      context: ./reactive-accounts
+      dockerfile: Dockerfile
+    ports:
+      - "7500:8080"
+    depends_on:
+      - discovery
+      - mongodb
+      - dataloader
+#      - cassandra-node-1
+    links:
+      - mongodb:mongo
+      - discovery:discovery
+    environment:
+      SPRING_DATA_MONGODB_URI: mongodb://mongo/test
+
+  products:
+    image: tanerdiler/service-products-api
+    container_name: reactive-products
+    build:
+      context: ./reactive-products
+      dockerfile: Dockerfile
+    ports:
+      - "7501:8080"
+    depends_on:
+      - accounts
+      - mongodb
+#      - cassandra-node-1
+    links:
+      - mongodb:mongo
+      - discovery:discovery
+    environment:
+      SPRING_DATA_MONGODB_URI: mongodb://mongo/test
+
+  orders:
+    image: tanerdiler/service-orders-api
+    container_name: reactive-orders
+    build:
+      context: ./reactive-orders
+      dockerfile: Dockerfile
+    ports:
+      - "7502:8080"
+    depends_on:
+      - products
+      - mongodb
+#      - cassandra-node-1
+    links:
+      - mongodb:mongo
+      - discovery:discovery
+    environment:
+      SPRING_DATA_MONGODB_URI: mongodb://mongo/test
+
+  main:
+    image: tanerdiler/service-main-api
+    container_name: reactive-main
+    build:
+      context: ./reactive-backoffice
+      dockerfile: Dockerfile
+    ports:
+      - "7503:8080"
+    depends_on:
+      - orders
+    links:
+      - discovery:discovery
+      - accounts:accounts
+      - products:products
+      - orders:orders
